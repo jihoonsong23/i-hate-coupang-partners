@@ -1,7 +1,7 @@
 async function checkLink(){
   const url = document.getElementById('urlInput').value;
 
-  const res = await fetch('https://your-backend-url/check', {
+  const res = await fetch('https://i-hate-coupang-partners.onrender.com/check', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({url})
