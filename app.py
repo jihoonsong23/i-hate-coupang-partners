@@ -3,9 +3,8 @@ import requests
 from urllib.parse import urlparse, parse_qs
 from flask_cors import CORS
 
-# Flask 앱 생성
 app = Flask(__name__)
-CORS(app)  # CORS 허용 (프론트엔드에서 API 호출 가능하도록)
+CORS(app)
 
 @app.route('/')
 def home():
@@ -13,19 +12,29 @@ def home():
 
 @app.route('/check', methods=['POST'])
 def check_link():
-    """쿠팡 단축링크 → 원본 링크 추출 → 파트너스 여부 판별"""
     data = request.json
     short_url = data.get('url')
 
     if not short_url:
         return jsonify({'error': 'URL이 제공되지 않았습니다.'}), 400
 
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        resp = requests.get(short_url, allow_redirects=True, headers=headers, timeout=5)
-        final_url = resp.url
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                      'AppleWebKit/537.36 (KHTML, like Gecko) '
+                      'Chrome/115.0 Safari/537.36'
+    }
 
-        # URL에서 쿼리 파라미터 분석
+    try:
+        # 1️⃣ 먼저 HEAD 요청 시도 (빠르게 리디렉션 확인)
+        try:
+            resp = requests.head(short_url, allow_redirects=True, headers=headers, timeout=8)
+            final_url = resp.url
+        except Exception:
+            # 2️⃣ HEAD 실패 시 GET 요청 재시도
+            resp = requests.get(short_url, allow_redirects=True, headers=headers, timeout=15)
+            final_url = resp.url
+
+        # 3️⃣ 원본 URL에서 lptag 파라미터 추출
         params = parse_qs(urlparse(final_url).query)
         lptag = params.get('lptag', [None])[0]
 
@@ -34,9 +43,12 @@ def check_link():
             'is_partners': bool(lptag),
             'partners_id': lptag or '없음'
         })
+
+    except requests.exceptions.Timeout:
+        return jsonify({'error': '쿠팡 서버 응답이 너무 느립니다. 다시 시도해주세요.'}), 504
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 if __name__ == '__main__':
-    # 로컬 실행 시
     app.run(host='0.0.0.0', port=5000, debug=True)
